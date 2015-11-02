@@ -11,35 +11,13 @@ import Network.Wai.Dispatch
 import Network.Wai.Application.Static
 import Data.ByteString.Lazy.Char8 (pack)
 
-content_type_text_plain = [("Content-Type", "text/plain")]
-content_type_text_html = [("Content-Type", "text/html")]
-
-error404 :: Application
-error404 request respond =
-  respond $ responseLBS
-    status404
-    content_type_text_plain
-    (pack ("Page not found: " ++ show (rawPathInfo request)))
-
-indexPage :: Application
-indexPage request respond =
-  respond $ responseLBS
-    status200
-    content_type_text_html
-    "This is the math-db application."
-
-coq :: Application
-coq request respond =
-  respond $ responseLBS
-    status500
-    content_type_text_plain
-    "Not implemented yet"
+import Apps
 
 app :: Application
 app request respond =
   let path = pathInfo request in
   if path == [] then
-    indexPage request respond
+    indexPageApp request respond
   else if head path == "coq" then
     coq request respond
   else
