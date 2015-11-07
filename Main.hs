@@ -12,14 +12,15 @@ import Network.Wai.Application.Static
 import Data.ByteString.Lazy.Char8 (pack)
 
 import Apps
+import Services
 
-app :: Application
-app request respond =
+app :: Services -> Application
+app s request respond =
   let path = pathInfo request in
   if path == [] then
     indexPageApp request respond
   else if head path == "coq" then
-    coq request respond
+    coq (coqService s) request respond
   else
     error404 request respond
 
@@ -28,5 +29,7 @@ static_middleware = staticPolicy (hasPrefix "static/")
 
 main :: IO ()
 main = do
-    putStrLn "http://localhost:8080/"
-    run 8080 $ static_middleware app
+  s <- startServices
+  putStrLn "http://localhost:8080/"
+  run 8080 $ static_middleware $ app s
+  stopServices s
