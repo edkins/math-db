@@ -8,9 +8,8 @@ import Data.Text.IO as T
 import Data.ByteString.Lazy as B
 import System.IO (hFlush)
 import Data.Text.Lazy.Encoding (encodeUtf8)
-import Text.XML.Light.Types
-import Text.XML.Light.Output
 
+import DodgyXML
 import XMLPipe
 
 data CoqProcess =
@@ -28,22 +27,6 @@ startCoq = do
   rcv <- xmlReceiver stdout
   return CoqProcess {send = send, rcv = rcv, process = process}
 
-xmlq :: String -> QName
-xmlq str = QName {qName = str, qURI = Nothing, qPrefix = Nothing}
-
-xmlattr :: (String,String) -> Attr
-xmlattr (k,v) = Attr {attrKey = xmlq k, attrVal = v}
-
-xmltext :: Text -> Content
-xmltext str = Text $ CData {cdVerbatim = CDataText, cdData = T.unpack str, cdLine = Nothing}
-
-xml :: String -> [(String,String)] -> [Content] -> Content
-xml tag attrs content = let attribs = Prelude.map xmlattr attrs in
-  Elem $ Element {elName = xmlq tag, elAttribs = attribs, elContent = content, elLine = Nothing}
-
-totext :: Content -> Text
-totext x = T.pack $ showContent x
-
 type CoqExpr = Text
 type CoqType = CoqExpr
 type CoqVersion = Text
@@ -53,7 +36,7 @@ asCoqExpr str = return str
 
 stopCoq :: CoqProcess -> IO ()
 stopCoq proc = do
-  let call = xml "call" [("val","quit")] []
+  let call = Tag "call" [("val","quit")] []
   xmlSend (send proc) call
   Just ack <- xmlReceive (rcv proc)
   waitForProcess (process proc)
@@ -61,17 +44,17 @@ stopCoq proc = do
 
 coqGetVersion :: CoqProcess -> IO CoqVersion
 coqGetVersion proc = do
-  let call = xml "call" [("val","about")] []
+  let call = Tag "call" [("val","about")] []
   xmlSend (send proc) call
   Just version <- xmlReceive (rcv proc)
-  return $ totext version
+  return $ showContent version
 
 coqGetType :: CoqProcess -> CoqExpr -> IO (CoqExpr, CoqType)
 coqGetType proc expr = do
-  let str = xmltext (T.append "Check " (T.append expr "."))
-  let call = xml "call" [("val","interp"),("id","0"),("raw","")] [str]
+  let str = String $ T.append "Check " (T.append expr ".")
+  let call = Tag "call" [("val","interp"),("id","0"),("raw","")] [str]
   xmlSend (send proc) call
   Just typ <- xmlReceive (rcv proc)
-  T.putStrLn (totext typ)
-  return ("foo",totext typ)
+  T.putStrLn (showContent typ)
+  return ("foo",showContent typ)
 

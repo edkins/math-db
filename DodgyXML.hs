@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 module DodgyXML where
 
 import Data.Text
@@ -8,7 +9,7 @@ import Data.Char
 import Debug.Trace
 
 type Attrib = (Text,Text)
-data Element = Tag Text [Attrib] [Element] | String Text deriving Show
+data Content = Tag Text [Attrib] [Content] | String Text deriving Show
 
 {-
  - A totally broken non-conformant XML parser, sufficient for parsing the output of coqtop -ideslave
@@ -16,15 +17,15 @@ data Element = Tag Text [Attrib] [Element] | String Text deriving Show
  - as the end of a tag is reached.
  -}
 
-dodgyParse :: L.Text -> [Element]
-dodgyParse input =
+parseXML :: L.Text -> [Content]
+parseXML input =
   case parse parseItem input of
-    Done input' r -> r : dodgyParse input'
+    Done input' r -> r : parseXML input'
     res -> trace (show res) []
 
 parseItem = parseTagged <|> parseString
 
-parseTagged :: Parser Element
+parseTagged :: Parser Content
 parseTagged = do
   char '<'
   name <- parseWord
@@ -63,4 +64,17 @@ isWordChar ch = (isAlpha ch || ch == '_')
 parseString = do
   text <- takeWhile1 isStringChar
   return $ String text
+
+showAttrs :: [Attrib] -> Text
+showAttrs [] = ""
+showAttrs ((k,v):attrs) = " " `append` k `append` "=\"" `append` v `append` "\"" `append` showAttrs attrs
+
+showContent :: Content -> Text
+showContent (String str) = str
+showContent (Tag name attrs []) = "<" `append` name `append` showAttrs attrs `append` "/>"
+showContent (Tag name attrs contents) = "<" `append` name `append` showAttrs attrs `append` ">" `append` showContents contents `append` "</" `append` name `append` ">"
+
+showContents :: [Content] -> Text
+showContents [] = ""
+showContents (c:cs) = showContent c `append` showContents cs
 
