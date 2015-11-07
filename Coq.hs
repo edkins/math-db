@@ -38,7 +38,7 @@ stopCoq :: CoqProcess -> IO ()
 stopCoq proc = do
   let call = Tag "call" [("val","quit")] []
   xmlSend (send proc) call
-  Just ack <- xmlReceive (rcv proc)
+  ack <- xmlReceive (rcv proc)
   waitForProcess (process proc)
   return ()
 
@@ -46,7 +46,7 @@ coqGetVersion :: CoqProcess -> IO CoqVersion
 coqGetVersion proc = do
   let call = Tag "call" [("val","about")] []
   xmlSend (send proc) call
-  Just version <- xmlReceive (rcv proc)
+  version <- xmlReceive (rcv proc)
   return $ showContent version
 
 coqGetType :: CoqProcess -> CoqExpr -> IO (CoqExpr, CoqType)
@@ -54,7 +54,6 @@ coqGetType proc expr = do
   let str = String $ T.append "Check " (T.append expr ".")
   let call = Tag "call" [("val","interp"),("id","0"),("raw","")] [str]
   xmlSend (send proc) call
-  Just typ <- xmlReceive (rcv proc)
-  T.putStrLn (showContent typ)
+  typ <- xmlReceive (rcv proc)
   return ("foo",showContent typ)
 

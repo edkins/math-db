@@ -9,7 +9,7 @@ import Data.Char
 import Debug.Trace
 
 type Attrib = (Text,Text)
-data Content = Tag Text [Attrib] [Content] | String Text deriving Show
+data Content = Tag Text [Attrib] [Content] | String Text | Character Text deriving Show
 
 {-
  - A totally broken non-conformant XML parser, sufficient for parsing the output of coqtop -ideslave
@@ -17,13 +17,8 @@ data Content = Tag Text [Attrib] [Content] | String Text deriving Show
  - as the end of a tag is reached.
  -}
 
-parseXML :: L.Text -> [Content]
-parseXML input =
-  case parse parseItem input of
-    Done input' r -> r : parseXML input'
-    res -> trace (show res) []
 
-parseItem = parseTagged <|> parseString
+parseItem = parseTagged <|> parseString <|> parseCharacter
 
 parseTagged :: Parser Content
 parseTagged = do
@@ -58,6 +53,12 @@ parseQuoted = do
   char '"'
   return result
 
+parseCharacter = do
+  char '&'
+  result <- takeTill (';'==)
+  char ';'
+  return $ Character result
+
 isStringChar ch = (ch /= '<' && ch /= '&')
 isWordChar ch = (isAlpha ch || ch == '_')
 
@@ -71,6 +72,7 @@ showAttrs ((k,v):attrs) = " " `append` k `append` "=\"" `append` v `append` "\""
 
 showContent :: Content -> Text
 showContent (String str) = str
+showContent (Character str) = "&" `append` str `append` ";"
 showContent (Tag name attrs []) = "<" `append` name `append` showAttrs attrs `append` "/>"
 showContent (Tag name attrs contents) = "<" `append` name `append` showAttrs attrs `append` ">" `append` showContents contents `append` "</" `append` name `append` ">"
 
