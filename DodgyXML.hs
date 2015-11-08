@@ -1,15 +1,14 @@
 {-# LANGUAGE OverloadedStrings #-}
 module DodgyXML where
 
-import Data.Text
+import qualified Data.Text as T
 import qualified Data.Text.Lazy as L
 import Data.Attoparsec.Text.Lazy
 import Control.Applicative
 import Data.Char
-import Debug.Trace
 
-type Attrib = (Text,Text)
-data Content = Tag Text [Attrib] [Content] | String Text | Character Text deriving Show
+type Attrib = (T.Text,T.Text)
+data Content = Tag T.Text [Attrib] [Content] | String T.Text | Character T.Text deriving Show
 
 {-
  - A totally broken non-conformant XML parser, sufficient for parsing the output of coqtop -ideslave
@@ -66,17 +65,43 @@ parseString = do
   text <- takeWhile1 isStringChar
   return $ String text
 
-showAttrs :: [Attrib] -> Text
+showAttrs :: [Attrib] -> T.Text
 showAttrs [] = ""
-showAttrs ((k,v):attrs) = " " `append` k `append` "=\"" `append` v `append` "\"" `append` showAttrs attrs
+showAttrs ((k,v):attrs) = " " `T.append` k `T.append` "=\"" `T.append` v `T.append` "\"" `T.append` showAttrs attrs
 
-showContent :: Content -> Text
+showContent :: Content -> T.Text
 showContent (String str) = str
-showContent (Character str) = "&" `append` str `append` ";"
-showContent (Tag name attrs []) = "<" `append` name `append` showAttrs attrs `append` "/>"
-showContent (Tag name attrs contents) = "<" `append` name `append` showAttrs attrs `append` ">" `append` showContents contents `append` "</" `append` name `append` ">"
+showContent (Character str) = "&" `T.append` str `T.append` ";"
+showContent (Tag name attrs []) = "<" `T.append` name `T.append` showAttrs attrs `T.append` "/>"
+showContent (Tag name attrs contents) = "<" `T.append` name `T.append` showAttrs attrs `T.append` ">" `T.append` showContents contents `T.append` "</" `T.append` name `T.append` ">"
 
-showContents :: [Content] -> Text
+showContents :: [Content] -> T.Text
 showContents [] = ""
-showContents (c:cs) = showContent c `append` showContents cs
+showContents (c:cs) = showContent c `T.append` showContents cs
 
+xmlMatchTag :: T.Text -> [Attrib] -> [Content] -> [Content]
+xmlMatchTag name attrs [Tag name' attrs' contents] =
+  if name /= name' then
+    error "Name mismatch"
+  else if attrs /= attrs' then
+    error "Attr mismatch"
+  else
+    contents
+xmlMatchTag name _ _ = error ("Expecting single tag:" ++ T.unpack name)
+
+decodeEntity :: T.Text -> T.Text
+decodeEntity ent =
+  if ent == "lt" then "<"
+  else if ent == "gt" then ">"
+  else if ent == "amp" then "&"
+  else if ent == "quot" then "\""
+  else if ent == "apos" then "'"
+  else error ("Unknown entity:" ++ T.unpack ent)
+
+xmlMatchOneString :: Content -> T.Text
+xmlMatchOneString (String text) = text
+xmlMatchOneString (Character ent) = decodeEntity ent
+xmlMatchOneString _ = error "Expecting text"
+
+xmlMatchString :: [Content] -> T.Text
+xmlMatchString cs = T.concat (map xmlMatchOneString cs)

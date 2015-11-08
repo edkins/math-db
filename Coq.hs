@@ -12,6 +12,16 @@ import qualified Data.Text.Lazy.Encoding (encodeUtf8)
 import AppIO
 import DodgyXML
 import XMLPipe
+import Expr
+
+type CoqAbout = T.Text
+
+data CoqReport = CoqReport {
+  lookupExpr :: T.Text,
+  expr :: Expr,
+  typ :: Expr,
+  about :: CoqAbout
+} deriving Show
 
 startCoq :: IO CoqProcess
 startCoq = do
@@ -42,27 +52,49 @@ coqInteract el = do
 coqCall :: T.Text -> [Attrib] -> [Content] -> AppIO Content
 coqCall val attrs contents = coqInteract $ Tag "call" (("val",val):attrs) contents
 
-coqAbout :: AppIO Content
-coqAbout = coqCall "about" [] []
+xmlToAbout = showContent
 
-coqInterp :: T.Text -> AppIO Content
-coqInterp text = coqCall "interp" [("id","0"),("raw","")] [String text]
+coqAbout :: AppIO CoqAbout
+coqAbout = do
+  xml <- coqCall "about" [] []
+  return (xmlToAbout xml)
 
-coqCheck :: T.Text -> AppIO Content
-coqCheck text = coqInterp ("Check " `T.append` text `T.append` ".")
+fetchInterpText :: Content -> AppIO T.Text
+fetchInterpText value =
+  let string = xmlMatchTag "value" [("val","good")] [value] in
+  let text = xmlMatchTag "string" [] string in
+  return (xmlMatchString text)
 
-coqLookup :: T.Text -> AppIO T.Text
+coqInterp :: T.Text -> AppIO T.Text
+coqInterp text = do
+  xml <- coqCall "interp" [("id","0"),("raw","")] [String text]
+  fetchInterpText xml
+
+coqCheck :: T.Text -> AppIO Expr
+coqCheck text = do
+  text <- coqInterp ("Check " `T.append` text `T.append` ".")
+  return (coqParseTypeJudgement text)
+
+coqLookup :: T.Text -> AppIO CoqReport
 coqLookup text = do
   about <- coqAbout
   check <- coqCheck text
-  return (showContent about `T.append` showContent check)
+  let (expr,typ) = unpackTypeJudgement check
+  return $ CoqReport {
+    lookupExpr = text,
+    expr = expr,
+    typ = typ,
+    about = about
+  }
 
 coqIndex :: AppIO T.Text
 coqIndex = do
   about <- coqAbout
-  return (showContent about)
+  return about
 
 coqChunks :: [T.Text] -> AppIO T.Text
 coqChunks [] = coqIndex
-coqChunks [text] = coqLookup text
+coqChunks [text] = do
+  report <- coqLookup text
+  return $ T.pack $ show report
 coqChunks _ = error "Too many path elements"

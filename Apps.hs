@@ -37,7 +37,6 @@ indexPageApp request respond =
     content_type_text_html
     str
 
-
 coq :: Processes -> Application
 coq p request respond =
   let (_:chunks) = pathInfo request in
