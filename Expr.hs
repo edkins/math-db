@@ -6,7 +6,7 @@ import Data.Attoparsec.Text.Lazy
 import Control.Applicative
 import Data.Char
 
-data Flavour = Var | Punctuation | Whitespace | TypeJudgement | Apply | Paren | Error String deriving Show
+data Flavour = Var | Punctuation | Whitespace | TypeJudgement | Apply | Binop | Paren | Top | Error String deriving Show
 data Expr = Expr {
   exprFlavour :: Flavour,
   exprText :: T.Text,
@@ -14,17 +14,24 @@ data Expr = Expr {
 } deriving Show
 
 coqParseTypeJudgement :: T.Text -> Expr
-coqParseTypeJudgement text = errParse coqTypeJudgement text
+coqParseTypeJudgement text = errParse (asTop coqTypeJudgement) text
+
+unpackTop :: Expr -> Expr
+unpackTop (Expr Top text [_,e,_]) = e
+unpackTop e = error ("Doesn't look like top-level thing: " ++ show e)
 
 unpackTypeJudgement :: Expr -> (Expr, Expr)
 unpackTypeJudgement (Expr TypeJudgement text [e,_,t]) = (e,t)
-unpackTypeJudgement e = error ("Doesn't look like a type judgement: " ++ (show e))
+unpackTypeJudgement e = error ("Doesn't look like a type judgement: " ++ show e)
 
 errParse :: Parser Expr -> T.Text -> Expr
 errParse p text = 
-  case parseOnly p text of
+  case parseOnly (p <* endOfInput) text of
     Left err -> Expr {exprFlavour = Error err, exprText = text, exprSub = []}
     Right e -> e
+
+asTop :: Parser Expr -> Parser Expr
+asTop p = combine Top [maybeSpace, p, maybeSpace]
 
 makeExpr :: Flavour -> [Expr] -> Expr
 makeExpr flavour es =
@@ -62,6 +69,21 @@ coqTypeJudgement = combine TypeJudgement [coqExpr, punc ":", coqExpr]
 
 coqExpr :: Parser Expr
 coqExpr = do
+  e <- coqChain
+  coqTryBinop e
+
+coqTryBinop :: Expr -> Parser Expr
+coqTryBinop e = coqBinop e <|> return e
+
+coqBinop :: Expr -> Parser Expr
+coqBinop e = do
+  op <- atom Punctuation binopSpaces
+  e' <- coqExpr
+  let e_op_e' = makeExpr Binop [e, op, e']
+  coqTryBinop e_op_e'
+
+coqChain :: Parser Expr
+coqChain = do
   e <- coqTerm
   coqTryApply e
 
@@ -99,3 +121,13 @@ stringSpaces str = do
   str <- string str
   sp' <- spaces
   return (sp `T.append` str `T.append` sp')
+
+binopSpaces :: Parser T.Text
+binopSpaces = do
+  sp <- spaces
+  str <- binop
+  sp' <- spaces
+  return (sp `T.append` str `T.append` sp')
+
+binop = string "->" <|> string "+"
+

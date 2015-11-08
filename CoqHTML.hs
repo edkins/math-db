@@ -2,26 +2,46 @@
 module CoqHTML where
 
 import qualified Data.Text as T
-import qualified Text.Blaze.Html5 as H
+import Text.Blaze.Html5 as H
 import qualified Text.Blaze.Html5.Attributes as A
 
 import Coq
 import AppIO
 import Expr
 
-logEntryHTML :: (LogEntry, T.Text) -> H.Html
-logEntryHTML (entry,text) = H.p $ H.toHtml text
+logEntryHTML :: (LogEntry, T.Text) -> Html
+logEntryHTML (entry,text) = p $ toHtml text
 
-logHTML :: Log -> H.Html
-logHTML log = sequence_ (map logEntryHTML log)
+logHTML :: Log -> Html
+logHTML log = sequence_ (Prelude.map logEntryHTML log)
 
-coqHTML :: CoqReport -> Log -> H.Html
-coqHTML report log = H.docTypeHtml $ do
-  H.head $ do
-    H.title $ H.toHtml $ exprText $ expr report
-  H.body $ do
-    H.h1 $ H.toHtml $ exprText $ expr report
-    H.p $ H.toHtml $ lookupExpr report
-    H.p $ H.toHtml $ exprText $ typ report
-    H.p $ H.toHtml $ about report
-    logHTML log
+headingHTML :: Expr -> Html
+headingHTML e = h1 $ toHtml $ exprText e
+
+redirectHTML :: T.Text -> Expr -> Html
+redirectHTML orig changed
+  | orig /= exprText changed =
+    p $ toHtml ("Redirected from: " `T.append` orig)
+  | otherwise =
+    return ()
+
+typeHTML :: Expr -> Html
+typeHTML t = p $ toHtml $ ("Type: " `T.append` exprText t)
+
+aboutHTML :: CoqAbout -> Html
+aboutHTML a = p $ toHtml $ version a
+
+coqHTML :: CoqReport -> Log -> Html
+coqHTML report log =
+  let e = expr report in
+  docTypeHtml $ do
+    H.head $ do
+      title $ toHtml $ exprText $ e
+    body $ do
+      headingHTML e
+      redirectHTML (lookupExpr report) e
+      typeHTML (typ report)
+      hr
+      logHTML log
+      hr
+      aboutHTML (about report)
