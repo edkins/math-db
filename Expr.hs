@@ -6,29 +6,29 @@ import Data.Attoparsec.Text.Lazy
 import Control.Applicative
 import Data.Char
 
-data Flavour = Var | Punctuation | Whitespace | TypeJudgement | Apply | Binop | Paren | Top | Error String deriving Show
+data Flavour = Var | Punctuation | Whitespace | TypeJudgement | Apply | Binop | Paren | Top deriving Show
 data Expr = Expr {
   exprFlavour :: Flavour,
   exprText :: T.Text,
   exprSub :: [Expr]
 } deriving Show
 
-coqParseTypeJudgement :: T.Text -> Expr
+coqParseTypeJudgement :: Monad m => T.Text -> m Expr
 coqParseTypeJudgement text = errParse (asTop coqTypeJudgement) text
 
-unpackTop :: Expr -> Expr
-unpackTop (Expr Top text [_,e,_]) = e
-unpackTop e = error ("Doesn't look like top-level thing: " ++ show e)
+unpackTop :: Monad m => Expr -> m Expr
+unpackTop (Expr Top text [_,e,_]) = return e
+unpackTop e = fail ("Doesn't look like top-level thing: " ++ show e)
 
-unpackTypeJudgement :: Expr -> (Expr, Expr)
-unpackTypeJudgement (Expr TypeJudgement text [e,_,t]) = (e,t)
-unpackTypeJudgement e = error ("Doesn't look like a type judgement: " ++ show e)
+unpackTypeJudgement :: Monad m => Expr -> m (Expr, Expr)
+unpackTypeJudgement (Expr TypeJudgement text [e,_,t]) = return (e,t)
+unpackTypeJudgement e = fail ("Doesn't look like a type judgement: " ++ show e)
 
-errParse :: Parser Expr -> T.Text -> Expr
+errParse :: Monad m => Parser Expr -> T.Text -> m Expr
 errParse p text = 
   case parseOnly (p <* endOfInput) text of
-    Left err -> Expr {exprFlavour = Error err, exprText = text, exprSub = []}
-    Right e -> e
+    Left err -> fail ("Parse error: " ++ err)
+    Right e -> return e
 
 asTop :: Parser Expr -> Parser Expr
 asTop p = combine Top [maybeSpace, p, maybeSpace]

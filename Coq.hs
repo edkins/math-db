@@ -54,44 +54,66 @@ coqInteract el = do
   appLog CoqReceive rcv
   return result
 
+processFailure :: Content -> AppIO a
+processFailure (Tag name attrs contents) =
+  if name /= "value" then
+    fail "Unexpected error when parsing return value"
+  else if length attrs /= 3 ||
+    attrs !! 0 /= ("val","fail") ||
+    fst (attrs !! 1) /= "loc_s" ||
+    fst (attrs !! 2) /= "loc_e" then
+    fail "Unexpected attrs in error message"
+  else do
+    let loc_s = snd (attrs !! 1)
+    let loc_e = snd (attrs !! 2)
+    str <- xmlMatchString contents
+    fail (show (loc_s,loc_e) ++ T.unpack str)
+
 coqCall :: T.Text -> [Attrib] -> [Content] -> AppIO [Content]
 coqCall val attrs contents = do
   value <- coqInteract $ Tag "call" (("val",val):attrs) contents
-  return $ xmlMatchTag "value" [("val","good")] [value]
+  xmlMatchTag' "value" [("val","good")] [value] (processFailure value)
 
-fetchString :: [Content] -> T.Text
-fetchString stringTag = xmlMatchString (xmlMatchTag "string" [] stringTag)
+fetchString :: Monad m => [Content] -> m T.Text
+fetchString stringTag = do
+  string <- xmlMatchTag "string" [] stringTag
+  xmlMatchString string
 
-fetchAbout :: [Content] -> CoqAbout
-fetchAbout value =
-  let coq_info = xmlMatchTag "coq_info" [] value in
-  CoqAbout {
-    version = fetchString [coq_info !! 0],
-    v1 = fetchString [coq_info !! 1],
-    v2 = fetchString [coq_info !! 2],
-    v3 = fetchString [coq_info !! 3]
+fetchAbout :: Monad m => [Content] -> m CoqAbout
+fetchAbout value = do
+  coq_info <- xmlMatchTag "coq_info" [] value
+  version <- fetchString [coq_info !! 0]
+  v1 <- fetchString [coq_info !! 1]
+  v2 <- fetchString [coq_info !! 2]
+  v3 <- fetchString [coq_info !! 3]
+  return $ CoqAbout {
+    version = version,
+    v1 = v1,
+    v2 = v2,
+    v3 = v3
   }
 
 coqAbout :: AppIO CoqAbout
 coqAbout = do
   xml <- coqCall "about" [] []
-  return (fetchAbout xml)
+  fetchAbout xml
 
 coqInterp :: T.Text -> AppIO T.Text
 coqInterp text = do
-  xml <- coqCall "interp" [("id","0"),("raw","")] [String text]
-  return (fetchString xml)
+  xml <- coqCall "interp" [("id","0"),("raw","")] [xmlString text]
+  fetchString xml
 
 coqCheck :: T.Text -> AppIO Expr
 coqCheck text = do
   text <- coqInterp ("Check " `T.append` text `T.append` ".")
-  return (coqParseTypeJudgement text)
+  coqParseTypeJudgement text
 
 coqLookup :: T.Text -> AppIO CoqReport
 coqLookup text = do
   about <- coqAbout
   check <- coqCheck text
-  let (expr,typ) = unpackTypeJudgement $ unpackTop check
+  judgement <- unpackTop check
+  (expr,typ) <- unpackTypeJudgement judgement
   return $ CoqReport {
     lookupExpr = text,
     expr = expr,

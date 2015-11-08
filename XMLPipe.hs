@@ -17,7 +17,6 @@ xmlReceiver h = return h
 xmlReceive :: XMLReceiver -> IO (T.Text,Content)
 xmlReceive h = do
   chunk <- T.hGetChunk h
---  T.putStrLn chunk
   let result = parse parseItem chunk
   processResult chunk h result
 
@@ -39,7 +38,6 @@ xmlSender h = return h
 xmlSend :: XMLSender -> Content -> IO T.Text
 xmlSend h xml = do
   let str = showContent xml
---  T.putStrLn str
   T.hPutStr h str
   hFlush h
   return str

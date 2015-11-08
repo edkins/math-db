@@ -79,15 +79,25 @@ showContents :: [Content] -> T.Text
 showContents [] = ""
 showContents (c:cs) = showContent c `T.append` showContents cs
 
-xmlMatchTag :: T.Text -> [Attrib] -> [Content] -> [Content]
+xmlMatchTag' :: Monad m => T.Text -> [Attrib] -> [Content] -> m [Content] -> m [Content]
+xmlMatchTag' name attrs [Tag name' attrs' contents] fallback =
+  if name /= name' then
+    fallback
+  else if attrs /= attrs' then
+    fallback
+  else
+    return contents
+xmlMatchTag' _ _ _ fallback = fallback
+
+xmlMatchTag :: Monad m => T.Text -> [Attrib] -> [Content] -> m [Content]
 xmlMatchTag name attrs [Tag name' attrs' contents] =
   if name /= name' then
-    error "Name mismatch"
+    fail "Name mismatch"
   else if attrs /= attrs' then
-    error "Attr mismatch"
+    fail "Attr mismatch"
   else
-    contents
-xmlMatchTag name _ _ = error ("Expecting single tag:" ++ T.unpack name)
+    return contents
+xmlMatchTag name _ _ = fail ("Expecting single tag:" ++ T.unpack name)
 
 decodeEntity :: T.Text -> T.Text
 decodeEntity ent =
@@ -98,10 +108,18 @@ decodeEntity ent =
   else if ent == "apos" then "'"
   else error ("Unknown entity:" ++ T.unpack ent)
 
-xmlMatchOneString :: Content -> T.Text
-xmlMatchOneString (String text) = text
-xmlMatchOneString (Character ent) = decodeEntity ent
-xmlMatchOneString _ = error "Expecting text"
+xmlMatchOneString :: Monad m => Content -> m T.Text
+xmlMatchOneString (String text) = return text
+xmlMatchOneString (Character ent) = return $ decodeEntity ent
+xmlMatchOneString _ = fail "Expecting text"
 
-xmlMatchString :: [Content] -> T.Text
-xmlMatchString cs = T.concat (map xmlMatchOneString cs)
+xmlMatchString :: Monad m => [Content] -> m T.Text
+xmlMatchString cs = do
+  stuff <- sequence (map xmlMatchOneString cs)
+  return (T.concat stuff)
+
+xmlString :: T.Text -> Content
+xmlString str = String (
+  T.replace "<" "&lt;" $
+  T.replace ">" "&gt;" $
+  T.replace "&" "&amp;" str)

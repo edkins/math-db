@@ -26,13 +26,26 @@ redirectHTML orig changed
     return ()
 
 typeHTML :: Expr -> Html
-typeHTML t = p $ toHtml $ ("Type: " `T.append` exprText t)
+typeHTML t = p $ do
+  H.span "Type: "
+  a ! A.href (toValue ("/coq/" `T.append` exprText t)) $ do
+    toHtml (exprText t)
 
 aboutHTML :: CoqAbout -> Html
 aboutHTML a = p $ toHtml $ version a
 
-coqHTML :: CoqReport -> Log -> Html
-coqHTML report log =
+coqHTML :: Either T.Text CoqReport -> Log -> Html
+
+coqHTML (Left err) log =
+  docTypeHtml $ do
+    H.head $ do
+      title "error"
+    body $ do
+      p $ toHtml err
+      hr
+      logHTML log
+
+coqHTML (Right report) log =
   let e = expr report in
   docTypeHtml $ do
     H.head $ do
