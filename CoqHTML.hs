@@ -31,6 +31,10 @@ typeHTML t = p $ do
   a ! A.href (toValue ("/coq/" `T.append` exprText t)) $ do
     toHtml (exprText t)
 
+computedHTML e = do
+  h2 "Computed value"
+  p $ toHtml $ exprText e
+
 aboutHTML :: CoqAbout -> Html
 aboutHTML a = p $ toHtml $ version a
 
@@ -54,6 +58,7 @@ coqHTML (Right report) log =
       headingHTML e
       redirectHTML (lookupExpr report) e
       typeHTML (typ report)
+      computedHTML (computed report)
       hr
       logHTML log
       hr

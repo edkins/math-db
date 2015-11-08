@@ -6,7 +6,7 @@ import Data.Attoparsec.Text.Lazy
 import Control.Applicative
 import Data.Char
 
-data Flavour = Var | Punctuation | Whitespace | TypeJudgement | Apply | Binop | Paren | Top deriving Show
+data Flavour = Var | Punctuation | Whitespace | TypeJudgement | Apply | Binop | Lambda | Paren | Top deriving Show
 data Expr = Expr {
   exprFlavour :: Flavour,
   exprText :: T.Text,
@@ -15,6 +15,9 @@ data Expr = Expr {
 
 coqParseTypeJudgement :: Monad m => T.Text -> m Expr
 coqParseTypeJudgement text = errParse (asTop coqTypeJudgement) text
+
+coqParseCompute :: Monad m => T.Text -> m Expr
+coqParseCompute text = errParse (asComputeTop coqTypeJudgement) text
 
 unpackTop :: Monad m => Expr -> m Expr
 unpackTop (Expr Top text [_,e,_]) = return e
@@ -32,6 +35,9 @@ errParse p text =
 
 asTop :: Parser Expr -> Parser Expr
 asTop p = combine Top [maybeSpace, p, maybeSpace]
+
+asComputeTop :: Parser Expr -> Parser Expr
+asComputeTop p = combine Top [punc "=", p, maybeSpace]
 
 makeExpr :: Flavour -> [Expr] -> Expr
 makeExpr flavour es =
@@ -98,7 +104,10 @@ coqApply f = do
   coqTryApply fx
 
 coqTerm :: Parser Expr
-coqTerm = coqVar <|> coqParen
+coqTerm = coqLambda <|> coqVar <|> coqParen
+
+coqLambda :: Parser Expr
+coqLambda = combine Lambda [punc "fun", coqVar, punc ":", coqExpr, punc "=>", coqExpr]
 
 coqVar :: Parser Expr
 coqVar = atom Var word

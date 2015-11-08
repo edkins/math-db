@@ -25,6 +25,7 @@ data CoqReport = CoqReport {
   lookupExpr :: T.Text,
   expr :: Expr,
   typ :: Expr,
+  computed :: Expr,
   about :: CoqAbout
 } | CoqIndex { about :: CoqAbout } deriving Show
 
@@ -105,19 +106,28 @@ coqInterp text = do
 
 coqCheck :: T.Text -> AppIO Expr
 coqCheck text = do
-  text <- coqInterp ("Check " `T.append` text `T.append` ".")
-  coqParseTypeJudgement text
+  text' <- coqInterp ("Check " `T.append` text `T.append` ".")
+  coqParseTypeJudgement text'
+
+coqCompute :: T.Text -> AppIO Expr
+coqCompute text = do
+  text' <- coqInterp ("Compute " `T.append` text `T.append` ".")
+  coqParseCompute text'
 
 coqLookup :: T.Text -> AppIO CoqReport
 coqLookup text = do
   about <- coqAbout
   check <- coqCheck text
+  compute <- coqCompute text
   judgement <- unpackTop check
   (expr,typ) <- unpackTypeJudgement judgement
+  judgement' <- unpackTop compute
+  (expr',typ') <- unpackTypeJudgement judgement'
   return $ CoqReport {
     lookupExpr = text,
     expr = expr,
     typ = typ,
+    computed = expr',
     about = about
   }
 
