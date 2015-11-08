@@ -18,6 +18,7 @@ import IndexPage
 import Services
 import Coq
 import AppIO
+import CoqHTML
 
 content_type_text_plain = [("Content-Type", "text/plain")]
 content_type_text_html = [("Content-Type", "text/html")]
@@ -41,6 +42,7 @@ coq :: Processes -> Application
 coq p request respond =
   let (_:chunks) = pathInfo request in
   let appio = coqChunks chunks in do
-    (result, log) <- runAppIO p appio
-    let message = result `T.append` T.pack (show log)
-    respond $ responseLBS status200 content_type_text_html (L.encodeUtf8 $ L.fromStrict message)
+    (report, log) <- runAppIO p appio
+    let html = coqHTML report log
+    let message = renderHtml html
+    respond $ responseLBS status200 content_type_text_html message

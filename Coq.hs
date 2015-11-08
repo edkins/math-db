@@ -21,7 +21,7 @@ data CoqReport = CoqReport {
   expr :: Expr,
   typ :: Expr,
   about :: CoqAbout
-} deriving Show
+} | CoqIndex { about :: CoqAbout } deriving Show
 
 startCoq :: IO CoqProcess
 startCoq = do
@@ -87,14 +87,14 @@ coqLookup text = do
     about = about
   }
 
-coqIndex :: AppIO T.Text
+coqIndex :: AppIO CoqReport
 coqIndex = do
   about <- coqAbout
-  return about
+  return $ CoqIndex { about = about }
 
-coqChunks :: [T.Text] -> AppIO T.Text
+coqChunks :: [T.Text] -> AppIO CoqReport
 coqChunks [] = coqIndex
 coqChunks [text] = do
   report <- coqLookup text
-  return $ T.pack $ show report
+  return report
 coqChunks _ = error "Too many path elements"
