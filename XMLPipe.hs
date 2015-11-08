@@ -14,31 +14,32 @@ type XMLReceiver = Handle
 xmlReceiver :: Handle -> IO XMLReceiver
 xmlReceiver h = return h
 
-xmlReceive :: XMLReceiver -> IO Content
+xmlReceive :: XMLReceiver -> IO (T.Text,Content)
 xmlReceive h = do
   chunk <- T.hGetChunk h
-  T.putStrLn chunk
+--  T.putStrLn chunk
   let result = parse parseItem chunk
-  processResult h result
+  processResult chunk h result
 
-processResult :: Handle -> Result Content -> IO Content
-processResult h (Fail _ _ msg) = error msg
-processResult h (Done leftover r)
-  | leftover == "" = return r
+processResult :: T.Text -> Handle -> Result Content -> IO (T.Text,Content)
+processResult t h (Fail _ _ msg) = error msg
+processResult t h (Done leftover r)
+  | leftover == "" = return (t,r)
   | otherwise = fail ("Left over: " ++ T.unpack leftover)
-processResult h (Partial c) = do
+processResult t h (Partial c) = do
   chunk <- T.hGetChunk h
   let result = c chunk
-  processResult h result
+  processResult (t `T.append` chunk) h result
 
 type XMLSender = Handle
 
 xmlSender :: Handle -> IO XMLSender
 xmlSender h = return h
 
-xmlSend :: XMLSender -> Content -> IO ()
+xmlSend :: XMLSender -> Content -> IO T.Text
 xmlSend h xml = do
   let str = showContent xml
-  T.putStrLn str
+--  T.putStrLn str
   T.hPutStr h str
   hFlush h
+  return str

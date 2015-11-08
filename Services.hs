@@ -1,6 +1,7 @@
 module Services where
 
 import Coq
+import AppIO
 
 data Services = Services {coqService :: CoqProcess}
 

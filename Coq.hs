@@ -3,21 +3,15 @@ module Coq where
 
 import GHC.IO.Handle (Handle)
 import System.Process
-import Data.Text as T
-import Data.Text.IO as T
-import Data.ByteString.Lazy as B
+import qualified Data.Text as T
+import qualified Data.Text.IO as T
+import qualified Data.ByteString.Lazy as B
 import System.IO (hFlush)
-import Data.Text.Lazy.Encoding (encodeUtf8)
+import qualified Data.Text.Lazy.Encoding (encodeUtf8)
 
+import AppIO
 import DodgyXML
 import XMLPipe
-
-data CoqProcess =
-  CoqProcess {
-    send :: XMLSender,
-    rcv :: XMLReceiver,
-    process :: ProcessHandle
-  }
 
 startCoq :: IO CoqProcess
 startCoq = do
@@ -27,13 +21,6 @@ startCoq = do
   rcv <- xmlReceiver stdout
   return CoqProcess {send = send, rcv = rcv, process = process}
 
-type CoqExpr = Text
-type CoqType = CoqExpr
-type CoqVersion = Text
-
-asCoqExpr :: Text -> IO CoqExpr
-asCoqExpr str = return str
-
 stopCoq :: CoqProcess -> IO ()
 stopCoq proc = do
   let call = Tag "call" [("val","quit")] []
@@ -42,18 +29,40 @@ stopCoq proc = do
   waitForProcess (process proc)
   return ()
 
-coqGetVersion :: CoqProcess -> IO CoqVersion
-coqGetVersion proc = do
-  let call = Tag "call" [("val","about")] []
-  xmlSend (send proc) call
-  version <- xmlReceive (rcv proc)
-  return $ showContent version
+coqInteract :: Content -> AppIO Content
+coqInteract el = do
+  sender <- coqSend
+  receiver <- coqRcv
+  send <- appIO (xmlSend sender el)
+  appLog CoqSend send
+  (rcv, result) <- appIO (xmlReceive receiver)
+  appLog CoqReceive rcv
+  return result
 
-coqGetType :: CoqProcess -> CoqExpr -> IO (CoqExpr, CoqType)
-coqGetType proc expr = do
-  let str = String $ T.append "Check " (T.append expr ".")
-  let call = Tag "call" [("val","interp"),("id","0"),("raw","")] [str]
-  xmlSend (send proc) call
-  typ <- xmlReceive (rcv proc)
-  return ("foo",showContent typ)
+coqCall :: T.Text -> [Attrib] -> [Content] -> AppIO Content
+coqCall val attrs contents = coqInteract $ Tag "call" (("val",val):attrs) contents
 
+coqAbout :: AppIO Content
+coqAbout = coqCall "about" [] []
+
+coqInterp :: T.Text -> AppIO Content
+coqInterp text = coqCall "interp" [("id","0"),("raw","")] [String text]
+
+coqCheck :: T.Text -> AppIO Content
+coqCheck text = coqInterp ("Check " `T.append` text `T.append` ".")
+
+coqLookup :: T.Text -> AppIO T.Text
+coqLookup text = do
+  about <- coqAbout
+  check <- coqCheck text
+  return (showContent about `T.append` showContent check)
+
+coqIndex :: AppIO T.Text
+coqIndex = do
+  about <- coqAbout
+  return (showContent about)
+
+coqChunks :: [T.Text] -> AppIO T.Text
+coqChunks [] = coqIndex
+coqChunks [text] = coqLookup text
+coqChunks _ = error "Too many path elements"
